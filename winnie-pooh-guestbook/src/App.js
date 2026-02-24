@@ -1,38 +1,57 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from './utils/supabase';
 import './App.css';
 
 function App() {
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
   const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Load entries from localStorage when app starts
+  // Load entries from Supabase when app starts
   useEffect(() => {
-    const saved = localStorage.getItem('guestbook');
-    if (saved) {
-      setEntries(JSON.parse(saved));
-    }
+    fetchEntries();
   }, []);
 
-  // Save entries to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('guestbook', JSON.stringify(entries));
-  }, [entries]);
+  const fetchEntries = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('guestbook_entries')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  const handleSubmit = (e) => {
+      if (error) throw error;
+      setEntries(data || []);
+    } catch (error) {
+      console.error('Error fetching entries:', error);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim() || !message.trim()) return;
 
-    const newEntry = {
-      id: Date.now(),
-      name,
-      message,
-      created_at: new Date().toISOString()
-    };
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('guestbook_entries')
+        .insert([
+          { name, message }
+        ])
+        .select();
 
-    setEntries([newEntry, ...entries]);
-    setName('');
-    setMessage('');
+      if (error) throw error;
+
+      // Add new entry to the list
+      setEntries([data[0], ...entries]);
+      setName('');
+      setMessage('');
+    } catch (error) {
+      console.error('Error adding entry:', error);
+      alert('Oops! Could not add your message. Please try again! 🐝');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,6 +73,7 @@ function App() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="E.g., Winnie the Pooh"
+                disabled={loading}
               />
             </div>
             <div className="form-group">
@@ -64,10 +84,11 @@ function App() {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Write something sweet..."
                 rows="4"
+                disabled={loading}
               />
             </div>
-            <button type="submit" className="submit-btn">
-              Send Message 🍯
+            <button type="submit" className="submit-btn" disabled={loading}>
+              {loading ? 'Sending... 🐝' : 'Send Message 🍯'}
             </button>
           </form>
         </div>
